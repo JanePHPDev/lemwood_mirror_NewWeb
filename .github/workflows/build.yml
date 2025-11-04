@@ -1,0 +1,43 @@
+name: Go Build and Package
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build for Windows
+      run: GOOS=windows GOARCH=amd64 go build -o mirror.exe ./cmd/mirror
+
+    - name: Build for Linux
+      run: GOOS=linux GOARCH=amd64 go build -o mirror ./cmd/mirror
+
+    - name: Package Windows Artifact
+      run: zip -r mirror-windows.zip mirror.exe config.json web
+
+    - name: Upload Windows Package
+      uses: actions/upload-artifact@v3
+      with:
+        name: mirror-windows-package
+        path: mirror-windows.zip
+
+    - name: Package Linux Artifact
+      run: tar -czvf mirror-linux.tar.gz mirror config.json web
+
+    - name: Upload Linux Package
+      uses: actions/upload-artifact@v3
+      with:
+        name: mirror-linux-package
+        path: mirror-linux.tar.gz
