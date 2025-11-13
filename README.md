@@ -12,6 +12,8 @@
 - 提供 HTTP 服务：
   - `GET /` 前端页面。
   - `GET /api/status` 返回各启动器版本信息。
+  - `GET /api/latest` 返回所有启动器的最新稳定版本信息。
+  - `GET /api/latest/{launcher_id}` 返回指定启动器的最新稳定版本信息。
   - `POST /api/scan` 触发一次手动扫描。
   - `GET /api/files?path=...` 列出存储目录树。
   - `GET /download/...` 提供下载静态文件。
@@ -75,7 +77,10 @@ $env:GITHUB_TOKEN = "<your token>"
 
 ## API 集成
 
-其他网站或服务可以通过访问 `/api/status` 端点来获取镜像的最新版本信息。该端点返回一个 JSON 对象，其中包含每个启动器的详细信息。
+其他网站或服务可以通过访问以下端点来获取镜像的版本信息：
+- `GET /api/status`：返回所有版本的详细信息，包含 `latest` 标识字段。
+- `GET /api/latest`：返回每个启动器当前最新稳定版本的信息。
+- `GET /api/latest/{launcher_id}`：返回指定启动器当前最新稳定版本的信息。
 
 ### 请求
 
@@ -91,6 +96,18 @@ GET /api/status
 GET /api/status/{launcher_id}
 ```
 
+#### 获取全部最新稳定版本
+
+```http
+GET /api/latest
+```
+
+#### 获取指定启动器最新稳定版本
+
+```http
+GET /api/latest/{launcher_id}
+```
+
 ### 响应示例
 
 ```json
@@ -98,6 +115,7 @@ GET /api/status/{launcher_id}
   "fcl": {
     "version": "1.2.6.3",
     "download_path": "download/fcl/1.2.6.3",
+    "latest": true,
     "assets": [
       {
         "name": "FCL-release-1.2.6.3-all.apk",
@@ -109,6 +127,7 @@ GET /api/status/{launcher_id}
   "zl": {
     "version": "141000",
     "download_path": "download/zl/141000",
+    "latest": true,
     "assets": [
       {
         "name": "ZalithLauncher-1.4.1.0.apk",
@@ -120,12 +139,17 @@ GET /api/status/{launcher_id}
 }
 ```
 
-- **version**: 启动器的最新版本号。
+- **version**: 版本号。
 - **download_path**: 存储该版本文件的相对路径。
+- **latest**: 是否为该启动器当前最新稳定版本。
 - **assets**: 一个包含所有已下载资产文件的数组。
   - **name**: 资产文件名。
   - **size**: 文件大小（字节）。
   - **download_url**: 文件的完整下载链接。
+
+### 响应头
+- `X-Latest-Versions`: 在 `GET /api/status` 与 `GET /api/latest` 响应中提供所有启动器的最新版本对，例如：`fcl=v1.2.3,zl=141000`。
+- `X-Latest-Version`: 在 `GET /api/status/{launcher_id}` 与 `GET /api/latest/{launcher_id}` 响应中提供该启动器的最新版本号。
 
 ## 认证与限流
 - 建议在配置或环境变量中提供 `GITHUB_TOKEN`，提升 API 配额。
