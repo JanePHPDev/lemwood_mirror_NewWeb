@@ -9,11 +9,14 @@
 - 每 10 分钟自动检查更新（可通过配置调整）。
 - 启动时执行异步初始扫描，不阻塞 Web 服务启动。
 - 下载 release 资产到 `download/启动器名/版本号/`，并生成 `info.json`。
+- 集成 SQLite 数据库，自动记录访问日志和下载统计。
+- 提供详细的数据统计功能，包括访问量、下载排行、地域分布和每日趋势图表。
 - 提供 HTTP 服务：
   - `GET /` 前端页面。
   - `GET /api/status` 返回各启动器版本信息。
   - `GET /api/latest` 返回所有启动器的最新稳定版本信息。
   - `GET /api/latest/{launcher_id}` 返回指定启动器的最新稳定版本信息。
+  - `GET /api/stats` 返回统计数据。
   - `POST /api/scan` 触发一次手动扫描。
   - `GET /api/files?path=...` 列出存储目录树。
   - `GET /download/...` 提供下载静态文件。
@@ -75,12 +78,19 @@ $env:GITHUB_TOKEN = "<your token>"
 - 点击“手动刷新”将触发一次扫描更新。
 - 文件浏览可输入相对路径（例如 `.`、`fcl/`、`fcl/v1.2.3/`）查看结构。
 
+## 数据统计
+系统内置了基于 SQLite 的数据统计功能，自动记录用户的访问和下载行为。数据文件存储在 `storage_path` 下的 `stats.db` 中。
+- **访问统计**：记录 IP、User-Agent、Referer、地理位置（基于 IP）。
+- **下载统计**：记录具体下载的启动器、版本和文件名。
+- **可视化面板**：前端首页提供直观的统计图表和排行榜。
+
 ## API 集成
 
 其他网站或服务可以通过访问以下端点来获取镜像的版本信息：
 - `GET /api/status`：返回所有版本的详细信息（不包含 `latest` 字段）。
 - `GET /api/latest`：返回每个启动器当前最新稳定版本的信息。
 - `GET /api/latest/{launcher_id}`：返回指定启动器当前最新稳定版本的信息。
+- `GET /api/stats`：返回详细的统计数据。
 
 ### 请求
 
@@ -106,6 +116,12 @@ GET /api/latest
 
 ```http
 GET /api/latest/{launcher_id}
+```
+
+#### 获取统计数据
+
+```http
+GET /api/stats
 ```
 
 ### 响应示例
