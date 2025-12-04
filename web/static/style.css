@@ -192,13 +192,75 @@ input[type="text"] {
     align-items: center;
     justify-content: space-between;
     background-color: rgba(0,0,0,0.03);
-    padding: 8px;
-    border-radius: 4px;
+    padding: 12px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.asset-item:hover {
+    background-color: rgba(0,0,0,0.06);
 }
 
 @media (prefers-color-scheme: dark) {
     .asset-item {
         background-color: rgba(255,255,255,0.05);
+    }
+    .asset-item:hover {
+        background-color: rgba(255,255,255,0.1);
+    }
+}
+
+.asset-link {
+    color: var(--link-color);
+    text-decoration: none;
+    font-weight: 500;
+    flex-grow: 1;
+    margin-right: 15px;
+    word-break: break-all;
+}
+
+.asset-link:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}
+
+.copy-btn {
+    background-color: transparent;
+    color: #666;
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    font-size: 0.85em;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-width: 80px; /* 防止文字变化时抖动 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-btn:hover {
+    background-color: var(--button-bg-color);
+    color: var(--button-text-color);
+    border-color: var(--button-bg-color);
+}
+
+.copy-btn.copied {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+@media (prefers-color-scheme: dark) {
+    .copy-btn {
+        color: #aaa;
+        border-color: #444;
+    }
+    .copy-btn:hover {
+        background-color: var(--button-bg-color);
+        color: var(--button-text-color);
+        border-color: var(--button-bg-color);
     }
 }
 
