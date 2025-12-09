@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>启动器镜像状态</title>
+  <title>柠枺镜像状态</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>启动器镜像</h1>
+      <h1>柠枺镜像</h1>
       <div class="actions">
         <button id="show-api-docs">API 文档</button>
         <button id="refresh">手动刷新</button>
@@ -61,6 +61,20 @@
         </div>
       </section>
 
+      <section id="announcement-section">
+        <h2>公告</h2>
+        <div class="announcement-content">
+          <p>赞助网站：<a href="https://zs.lemwood.cn/" target="_blank">https://zs.lemwood.cn/</a></p>
+          <p>mt管理器下载：<a href="https://mt2.cn" target="_blank">mt2.cn</a></p>
+          <p>shizuku官网地址：<a href="https://shizuku.rikka.app/zh-hans/" target="_blank">https://shizuku.rikka.app/zh-hans/</a></p>
+        </div>
+      </section>
+
+      <section>
+        <h2>版本信息</h2>
+        <div id="status"></div>
+      </section>
+
       <section id="statistics-section">
         <h2>数据统计</h2>
         <div class="stats-overview">
@@ -91,11 +105,6 @@
       </section>
 
       <section>
-        <h2>版本信息</h2>
-        <div id="status"></div>
-      </section>
-
-      <section>
         <h2>文件浏览</h2>
         <div>
           <input type="text" id="path" placeholder="相对路径，例如：." value="." />
@@ -107,6 +116,7 @@
 
     <footer>
       <p>Lemwood Mirror</p>
+      <p>备案信息：<a href="https://beian.miit.gov.cn" target="_blank">新ICP备2024015133号-5</a></p>
     </footer>
   </div>
 

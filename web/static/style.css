@@ -264,6 +264,28 @@ input[type="text"] {
     }
 }
 
+/* Announcement Styles */
+#announcement-section .announcement-content {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    border-radius: 8px;
+}
+
+#announcement-section p {
+    margin: 10px 0;
+}
+
+#announcement-section a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+#announcement-section a:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}
+
 /* Statistics Styles */
 .stats-overview {
     display: grid;
@@ -350,6 +372,28 @@ input[type="text"] {
     font-weight: bold;
     min-width: 50px;
     text-align: right;
+}
+
+/* Footer Styles */
+footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--header-bg-color);
+    border-radius: 8px;
+}
+
+footer p {
+    margin: 8px 0;
+    font-size: 0.9em;
+    color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+    footer p {
+        color: #aaa;
+    }
 }
 
 /* Simple Chart Styles */
