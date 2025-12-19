@@ -47,6 +47,58 @@ func (s *State) RemoveVersion(launcher string, version string) {
 	s.latest[launcher] = s.pickLatest(s.index[launcher])
 }
 
+// ClearLatestFlags 清除指定启动器所有版本的 is_latest 标记
+func (s *State) ClearLatestFlags(launcher string) error {
+	s.mu.RLock()
+	versions, exists := s.index[launcher]
+	s.mu.RUnlock()
+	
+	if !exists {
+		return nil // 启动器不存在，无需清除
+	}
+	
+	for _, infoPath := range versions {
+		if err := s.clearLatestFlag(infoPath); err != nil {
+			log.Printf("清除 %s 的 latest 标记失败: %v", infoPath, err)
+			// 继续处理其他文件，不返回错误
+		}
+	}
+	
+	return nil
+}
+
+// clearLatestFlag 清除单个 index.json 文件的 is_latest 标记
+func (s *State) clearLatestFlag(infoPath string) error {
+	content, err := os.ReadFile(infoPath)
+	if err != nil {
+		return fmt.Errorf("读取文件失败: %w", err)
+	}
+	
+	var info map[string]interface{}
+	if err := json.Unmarshal(content, &info); err != nil {
+		return fmt.Errorf("解析 JSON 失败: %w", err)
+	}
+	
+	// 如果存在 is_latest 字段且为 true，则将其设置为 false
+	if isLatest, exists := info["is_latest"]; exists && isLatest == true {
+		info["is_latest"] = false
+		
+		// 重新写入文件
+		newContent, err := json.MarshalIndent(info, "", "  ")
+		if err != nil {
+			return fmt.Errorf("序列化 JSON 失败: %w", err)
+		}
+		
+		if err := os.WriteFile(infoPath, newContent, 0o644); err != nil {
+			return fmt.Errorf("写入文件失败: %w", err)
+		}
+		
+		log.Printf("已清除 %s 的 latest 标记", infoPath)
+	}
+	
+	return nil
+}
+
 func (s *State) Routes(mux *http.ServeMux) {
 	// 静态 UI
 	staticDir := filepath.Join("web", "static")

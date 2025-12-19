@@ -85,19 +85,35 @@ func main() {
 					gh.BackoffIfRateLimited(resp)
 					return
 				}
+				version := rel.GetTagName()
+				if version == "" {
+					version = rel.GetName()
+				}
+				
+				// 检查是否已经是最新版本，避免重复下载
+				mu.Lock()
+				ls := launchers[lcfg.Name]
+				if ls.Version == version {
+					mu.Unlock()
+					log.Printf("%s: 版本 %s 已是最新，跳过下载", lcfg.Name, version)
+					return
+				}
+				mu.Unlock()
+				
+				// 清除该启动器所有旧版本的 latest 标记
+				if err := s.ClearLatestFlags(lcfg.Name); err != nil {
+					log.Printf("%s: 清除旧版本 latest 标记失败: %v", lcfg.Name, err)
+				}
+				
 				downer := downloader.NewDownloader(cfg.DownloadTimeoutMinutes, cfg.ConcurrentDownloads)
 				infoPath, err := downer.DownloadLatest(ctx, lcfg.Name, base, cfg.ProxyURL, cfg.AssetProxyURL, cfg.XgetEnabled, cfg.XgetDomain, rel, cfg.ServerAddress, cfg.ServerPort, cfg.DownloadUrlBase, true)
 				if err != nil {
 					log.Printf("%s: 下载失败: %v", lcfg.Name, err)
 					return
 				}
-				version := rel.GetTagName()
-				if version == "" {
-					version = rel.GetName()
-				}
+				
 				s.UpdateIndex(lcfg.Name, version, infoPath)
 				mu.Lock()
-				ls := launchers[lcfg.Name]
 				ls.RepoURL = repoURL
 				ls.Version = version
 				ls.LastScan = time.Now()
