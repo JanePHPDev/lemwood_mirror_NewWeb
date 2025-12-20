@@ -18,13 +18,19 @@ import (
 type State struct {
 	BasePath string
 	// 缓存状态：map[launcher]map[version]infoPath
-	mu     sync.RWMutex
-	index  map[string]map[string]string
-	latest map[string]string
+	mu        sync.RWMutex
+	index     map[string]map[string]string
+	latest    map[string]string
+	infoCache map[string]map[string]interface{} // 缓存 index.json 文件内容
 }
 
 func NewState(base string) *State {
-	return &State{BasePath: base, index: make(map[string]map[string]string), latest: make(map[string]string)}
+	return &State{
+		BasePath:  base,
+		index:     make(map[string]map[string]string),
+		latest:    make(map[string]string),
+		infoCache: make(map[string]map[string]interface{}),
+	}
 }
 
 func (s *State) UpdateIndex(launcher string, version string, infoPath string) {
@@ -58,9 +64,17 @@ func (s *State) ClearLatestFlags(launcher string) error {
 	}
 	
 	for _, infoPath := range versions {
-		if err := s.clearLatestFlag(infoPath); err != nil {
-			log.Printf("清除 %s 的 latest 标记失败: %v", infoPath, err)
-			// 继续处理其他文件，不返回错误
+		// 检查缓存中的 is_latest 字段，如果为 true 才处理
+		s.mu.RLock()
+		info, exists := s.infoCache[infoPath]
+		s.mu.RUnlock()
+		
+		// 如果缓存存在且 is_latest 为 true，或者缓存不存在（需要读取文件），则处理
+		if !exists || (exists && info["is_latest"] == true) {
+			if err := s.clearLatestFlag(infoPath); err != nil {
+				log.Printf("清除 %s 的 latest 标记失败: %v", infoPath, err)
+				// 继续处理其他文件，不返回错误
+			}
 		}
 	}
 	
@@ -69,14 +83,23 @@ func (s *State) ClearLatestFlags(launcher string) error {
 
 // clearLatestFlag 清除单个 index.json 文件的 is_latest 标记
 func (s *State) clearLatestFlag(infoPath string) error {
-	content, err := os.ReadFile(infoPath)
-	if err != nil {
-		return fmt.Errorf("读取文件失败: %w", err)
-	}
+	s.mu.RLock()
+	info, exists := s.infoCache[infoPath]
+	s.mu.RUnlock()
 	
-	var info map[string]interface{}
-	if err := json.Unmarshal(content, &info); err != nil {
-		return fmt.Errorf("解析 JSON 失败: %w", err)
+	// 如果缓存不存在，读取文件
+	if !exists {
+		content, err := os.ReadFile(infoPath)
+		if err != nil {
+			return fmt.Errorf("读取文件失败: %w", err)
+		}
+		
+		var fileInfo map[string]interface{}
+		if err := json.Unmarshal(content, &fileInfo); err != nil {
+			return fmt.Errorf("解析 JSON 失败: %w", err)
+		}
+		
+		info = fileInfo
 	}
 	
 	// 如果存在 is_latest 字段且为 true，则将其设置为 false
@@ -93,6 +116,11 @@ func (s *State) clearLatestFlag(infoPath string) error {
 			return fmt.Errorf("写入文件失败: %w", err)
 		}
 		
+		// 更新缓存
+		s.mu.Lock()
+		s.infoCache[infoPath] = info
+		s.mu.Unlock()
+		
 		log.Printf("已清除 %s 的 latest 标记", infoPath)
 	}
 	
@@ -102,8 +130,9 @@ func (s *State) clearLatestFlag(infoPath string) error {
 func (s *State) Routes(mux *http.ServeMux) {
 	// 静态 UI
 	staticDir := filepath.Join("web", "dist")
+	assetsDir := filepath.Join("web", "dist", "assets")
 
-	// 安全静态资源处理器
+	// 安全静态资源处理器 - /dist/
 	mux.HandleFunc("/dist/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		// 再次检查路径遍历以防万一，尽管中间件会捕获它
@@ -118,13 +147,43 @@ func (s *State) Routes(mux *http.ServeMux) {
 			return
 		}
 
-		fullPath := filepath.Join(distDir, relPath)
+		fullPath := filepath.Join(staticDir, relPath)
 		cleanPath := filepath.Clean(fullPath)
 
 		// 验证路径是否在 staticDir 内
 		absStaticDir, _ := filepath.Abs(staticDir)
 		absPath, _ := filepath.Abs(cleanPath)
 		if !strings.HasPrefix(absPath, absStaticDir) {
+			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
+			http.NotFound(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, cleanPath)
+	})
+
+	// 安全静态资源处理器 - /assets/
+	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		// 检查路径遍历
+		if containsDotDot(path) {
+			http.NotFound(w, r)
+			return
+		}
+
+		relPath := strings.TrimPrefix(path, "/assets/")
+		if relPath == "" || relPath == "/" {
+			http.NotFound(w, r)
+			return
+		}
+
+		fullPath := filepath.Join(assetsDir, relPath)
+		cleanPath := filepath.Clean(fullPath)
+
+		// 验证路径是否在 assetsDir 内
+		absAssetsDir, _ := filepath.Abs(assetsDir)
+		absPath, _ := filepath.Abs(cleanPath)
+		if !strings.HasPrefix(absPath, absAssetsDir) {
 			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
 			http.NotFound(w, r)
 			return
@@ -280,6 +339,17 @@ func (s *State) InitFromDisk() error {
 		launcher := parts[0]
 		version := parts[1]
 		s.UpdateIndex(launcher, version, path)
+		
+		// 缓存 index.json 文件内容
+		content, err := os.ReadFile(path)
+		if err == nil {
+			var info map[string]interface{}
+			if err := json.Unmarshal(content, &info); err == nil {
+				s.mu.Lock()
+				s.infoCache[path] = info
+				s.mu.Unlock()
+			}
+		}
 		return nil
 	})
 }
@@ -383,17 +453,31 @@ func (s *State) handleStatus(w http.ResponseWriter, r *http.Request) {
              info := map[string]any{
                  "tag_name": v,
              }
-             if content, err := os.ReadFile(p); err == nil {
-                 var fileInfo map[string]any
-                 if err := json.Unmarshal(content, &fileInfo); err == nil {
-                     for k, val := range fileInfo {
-                         // 排除 is_latest 字段
-                         if k != "is_latest" {
-                             info[k] = val
+             
+             // 先从缓存获取 index.json 内容
+             if fileInfo, ok := s.infoCache[p]; ok {
+                 for k, val := range fileInfo {
+                     // 排除 is_latest 字段
+                     if k != "is_latest" {
+                         info[k] = val
+                     }
+                 }
+             } else {
+                 // 缓存不存在时，读取文件并更新缓存
+                 if content, err := os.ReadFile(p); err == nil {
+                     var fileInfo map[string]any
+                     if err := json.Unmarshal(content, &fileInfo); err == nil {
+                         s.infoCache[p] = fileInfo // 更新缓存
+                         for k, val := range fileInfo {
+                             // 排除 is_latest 字段
+                             if k != "is_latest" {
+                                 info[k] = val
+                             }
                          }
                      }
                  }
              }
+             
              list = append(list, info)
         }
         sort.Slice(list, func(i, j int) bool {
@@ -415,17 +499,31 @@ func (s *State) handleLauncherStatus(w http.ResponseWriter, r *http.Request) {
         var list []map[string]any
         for v, p := range versions {
              info := map[string]any{"tag_name": v}
-             if content, err := os.ReadFile(p); err == nil {
-                 var fileInfo map[string]any
-                 if err := json.Unmarshal(content, &fileInfo); err == nil {
-                     for k, val := range fileInfo {
-                         // 排除 is_latest 字段
-                         if k != "is_latest" {
-                             info[k] = val
+             
+             // 先从缓存获取 index.json 内容
+             if fileInfo, ok := s.infoCache[p]; ok {
+                 for k, val := range fileInfo {
+                     // 排除 is_latest 字段
+                     if k != "is_latest" {
+                         info[k] = val
+                     }
+                 }
+             } else {
+                 // 缓存不存在时，读取文件并更新缓存
+                 if content, err := os.ReadFile(p); err == nil {
+                     var fileInfo map[string]any
+                     if err := json.Unmarshal(content, &fileInfo); err == nil {
+                         s.infoCache[p] = fileInfo // 更新缓存
+                         for k, val := range fileInfo {
+                             // 排除 is_latest 字段
+                             if k != "is_latest" {
+                                 info[k] = val
+                             }
                          }
                      }
                  }
              }
+             
              list = append(list, info)
         }
         sort.Slice(list, func(i, j int) bool {
