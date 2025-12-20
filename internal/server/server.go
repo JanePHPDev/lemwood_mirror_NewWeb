@@ -102,8 +102,9 @@ func (s *State) clearLatestFlag(infoPath string) error {
 func (s *State) Routes(mux *http.ServeMux) {
 	// 静态 UI
 	staticDir := filepath.Join("web", "dist")
+	assetsDir := filepath.Join("web", "assets")
 
-	// 安全静态资源处理器
+	// 安全静态资源处理器 - /dist/
 	mux.HandleFunc("/dist/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		// 再次检查路径遍历以防万一，尽管中间件会捕获它
@@ -118,13 +119,43 @@ func (s *State) Routes(mux *http.ServeMux) {
 			return
 		}
 
-		fullPath := filepath.Join(distDir, relPath)
+		fullPath := filepath.Join(staticDir, relPath)
 		cleanPath := filepath.Clean(fullPath)
 
 		// 验证路径是否在 staticDir 内
 		absStaticDir, _ := filepath.Abs(staticDir)
 		absPath, _ := filepath.Abs(cleanPath)
 		if !strings.HasPrefix(absPath, absStaticDir) {
+			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
+			http.NotFound(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, cleanPath)
+	})
+
+	// 安全静态资源处理器 - /assets/
+	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		// 检查路径遍历
+		if containsDotDot(path) {
+			http.NotFound(w, r)
+			return
+		}
+
+		relPath := strings.TrimPrefix(path, "/assets/")
+		if relPath == "" || relPath == "/" {
+			http.NotFound(w, r)
+			return
+		}
+
+		fullPath := filepath.Join(assetsDir, relPath)
+		cleanPath := filepath.Clean(fullPath)
+
+		// 验证路径是否在 assetsDir 内
+		absAssetsDir, _ := filepath.Abs(assetsDir)
+		absPath, _ := filepath.Abs(cleanPath)
+		if !strings.HasPrefix(absPath, absAssetsDir) {
 			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
 			http.NotFound(w, r)
 			return
