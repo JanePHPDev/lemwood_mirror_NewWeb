@@ -120,7 +120,7 @@
           <v-divider class="mb-4"></v-divider>
           
           <p class="text-body-2 mb-4">
-            这是一个提供各类Minecraft启动器及核心组件下载的高速镜像站，致力于为开发者与玩家打造稳定、快速的资源获取体验。基于腾讯云200Mbps高速服务器与自研Go语言Mirror架构，我们确保主流启动器如HMCL、PCL2、BakaXL及其依赖库的分发效率，无论是日常更新还是开发调试，都能享受流畅可靠的下载服务。
+            这是一个提供各类Minecraft启动器下载的高速镜像站，致力于为玩家打造稳定、快速的资源获取体验。基于腾讯云200Mbps高速服务器与自研Go语言Mirror架构，我们确保主流启动器如HMCL、FCL以及其他启动器的分发效率，无论是日常更新还是开发调试，都能享受流畅可靠的下载服务。
           </p>
           
           <div class="d-flex justify-center gap-4 mb-2">
