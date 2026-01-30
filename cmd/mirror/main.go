@@ -49,7 +49,13 @@ func main() {
 	var scanMu sync.Mutex
 	launchers := make(map[string]*LauncherState)
 	for _, l := range cfg.Launchers {
-		launchers[l.Name] = &LauncherState{Name: l.Name}
+		ls := &LauncherState{Name: l.Name}
+		// 从磁盘索引中初始化当前版本
+		if v := s.GetLatestVersion(l.Name); v != "" {
+			ls.Version = v
+			log.Printf("%s: 发现本地版本 %s", l.Name, v)
+		}
+		launchers[l.Name] = ls
 	}
 
 	scan := func() {

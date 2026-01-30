@@ -40,7 +40,24 @@ func (s *State) UpdateIndex(launcher string, version string, infoPath string) {
 		s.index[launcher] = make(map[string]string)
 	}
 	s.index[launcher][version] = infoPath
+
+	// 尝试从磁盘读取并更新缓存
+	if content, err := os.ReadFile(infoPath); err == nil {
+		var info map[string]interface{}
+		if err := json.Unmarshal(content, &info); err == nil {
+			s.infoCache[infoPath] = info
+		}
+	}
+
 	s.latest[launcher] = s.pickLatest(s.index[launcher])
+	log.Printf("更新启动器 %s 索引: 版本=%s, 最新版本=%s", launcher, version, s.latest[launcher])
+}
+
+// GetLatestVersion 获取启动器的最新版本号
+func (s *State) GetLatestVersion(launcher string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latest[launcher]
 }
 
 func (s *State) RemoveVersion(launcher string, version string) {
@@ -130,78 +147,59 @@ func (s *State) clearLatestFlag(infoPath string) error {
 func (s *State) Routes(mux *http.ServeMux) {
 	// 静态 UI
 	staticDir := filepath.Join("web", "dist")
-	assetsDir := filepath.Join("web", "dist", "assets")
 
-	// 安全静态资源处理器 - /dist/
-	mux.HandleFunc("/dist/", func(w http.ResponseWriter, r *http.Request) {
+	// 统一静态资源服务函数
+	serveStatic := func(w http.ResponseWriter, r *http.Request, baseDir string, prefix string) {
 		path := r.URL.Path
-		// 再次检查路径遍历以防万一，尽管中间件会捕获它
 		if containsDotDot(path) {
 			http.NotFound(w, r)
 			return
 		}
 
-		relPath := strings.TrimPrefix(path, "/dist/")
-		if relPath == "" || relPath == "/" {
+		relPath := strings.TrimPrefix(path, prefix)
+		if relPath == "" || strings.HasSuffix(relPath, "/") {
 			http.NotFound(w, r)
 			return
 		}
 
-		fullPath := filepath.Join(staticDir, relPath)
+		fullPath := filepath.Join(baseDir, relPath)
 		cleanPath := filepath.Clean(fullPath)
 
-		// 验证路径是否在 staticDir 内
-		absStaticDir, _ := filepath.Abs(staticDir)
+		// 验证路径安全性和文件类型
+		absBase, _ := filepath.Abs(baseDir)
 		absPath, _ := filepath.Abs(cleanPath)
-		if !strings.HasPrefix(absPath, absStaticDir) {
+		if !strings.HasPrefix(absPath, absBase) {
 			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
 			http.NotFound(w, r)
 			return
 		}
 
+		info, err := os.Stat(cleanPath)
+		if err != nil || info.IsDir() {
+			// 禁止访问目录
+			http.NotFound(w, r)
+			return
+		}
+
 		http.ServeFile(w, r, cleanPath)
+	}
+
+	// 静态资源处理器 - /dist/ 和 /assets/
+	mux.HandleFunc("/dist/", func(w http.ResponseWriter, r *http.Request) {
+		serveStatic(w, r, staticDir, "/dist/")
 	})
 
-	// 安全静态资源处理器 - /assets/
 	mux.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		// 检查路径遍历
-		if containsDotDot(path) {
-			http.NotFound(w, r)
-			return
-		}
-
-		relPath := strings.TrimPrefix(path, "/assets/")
-		if relPath == "" || relPath == "/" {
-			http.NotFound(w, r)
-			return
-		}
-
-		fullPath := filepath.Join(assetsDir, relPath)
-		cleanPath := filepath.Clean(fullPath)
-
-		// 验证路径是否在 assetsDir 内
-		absAssetsDir, _ := filepath.Abs(assetsDir)
-		absPath, _ := filepath.Abs(cleanPath)
-		if !strings.HasPrefix(absPath, absAssetsDir) {
-			log.Printf("安全警告：拦截到来自 %s 的路径逃逸尝试，请求路径：%s", r.RemoteAddr, path)
-			http.NotFound(w, r)
-			return
-		}
-
-		http.ServeFile(w, r, cleanPath)
+		// assets 通常在 dist/assets 下
+		serveStatic(w, r, filepath.Join(staticDir, "assets"), "/assets/")
 	})
 
 	// 根路径处理器
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/" {
-			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-			return
-		}
-		if path == "/index.html" {
-			// 手动服务内容以避免 http.ServeFile 的 301 重定向
-			f, err := os.Open(filepath.Join(staticDir, "index.html"))
+		if path == "/" || path == "/index.html" {
+			indexPath := filepath.Join(staticDir, "index.html")
+			f, err := os.Open(indexPath)
 			if err != nil {
 				http.NotFound(w, r)
 				return
@@ -211,14 +209,33 @@ func (s *State) Routes(mux *http.ServeMux) {
 			http.ServeContent(w, r, "index.html", d.ModTime(), f)
 			return
 		}
-		if path == "/404.html" {
-			http.ServeFile(w, r, filepath.Join(staticDir, "404.html"))
-			return
+		
+		// 允许访问根目录下的其他合法文件（如 favicon.svg）
+		if !strings.Contains(path, "/") || strings.Count(path, "/") == 1 {
+			fileName := strings.TrimPrefix(path, "/")
+			// 简单的白名单或排除目录
+			if fileName != "" && !strings.Contains(fileName, ".") {
+				// 如果没有后缀名且不是已知路由，可能是前端路由，返回 index.html
+				http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+				return
+			}
+			
+			fullPath := filepath.Join(staticDir, fileName)
+			if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
+				http.ServeFile(w, r, fullPath)
+				return
+			}
 		}
 
-		log.Printf("安全警告：拦截到来自 %s 的非法根目录访问尝试，请求路径：%s", r.RemoteAddr, path)
+		// 默认 404
 		w.WriteHeader(http.StatusNotFound)
-		http.ServeFile(w, r, filepath.Join(staticDir, "404.html"))
+		notFoundPath := filepath.Join(staticDir, "404.html")
+		if _, err := os.Stat(notFoundPath); err == nil {
+			http.ServeFile(w, r, notFoundPath)
+		} else {
+			// 如果没有 404.html，返回 index.html 以支持前端路由 fallback
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+		}
 	})
 
 	// 下载 - 安全处理器
@@ -230,6 +247,12 @@ func (s *State) Routes(mux *http.ServeMux) {
 		}
 
 		relPath := strings.TrimPrefix(path, "/download/")
+		if relPath == "" || strings.HasSuffix(relPath, "/") {
+			// 禁止直接访问 /download/ 根目录或任何子目录列表
+			http.NotFound(w, r)
+			return
+		}
+
 		fullPath := filepath.Join(s.BasePath, relPath)
 		cleanPath := filepath.Clean(fullPath)
 
@@ -242,6 +265,23 @@ func (s *State) Routes(mux *http.ServeMux) {
 			return
 		}
 
+		// 检查是否为目录
+		info, err := os.Stat(cleanPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.NotFound(w, r)
+				return
+			}
+			log.Printf("访问文件出错：%s, %v", path, err)
+			http.NotFound(w, r)
+			return
+		}
+		if info.IsDir() {
+			// 禁止目录列表访问
+			http.NotFound(w, r)
+			return
+		}
+
 		// 记录下载
 		parts := strings.Split(filepath.ToSlash(relPath), "/")
 		if len(parts) >= 2 {
@@ -249,19 +289,6 @@ func (s *State) Routes(mux *http.ServeMux) {
 			version := parts[1]
 			fileName := filepath.Base(relPath)
 			stats.RecordDownload(r, fileName, launcher, version)
-		}
-
-		// 检查文件是否存在
-		_, err := os.Stat(cleanPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Printf("文件未找到：%s", path)
-				http.NotFound(w, r)
-				return
-			}
-			log.Printf("访问文件出错：%s, %v", path, err)
-			http.NotFound(w, r)
-			return
 		}
 
 		http.ServeFile(w, r, cleanPath)
@@ -359,32 +386,55 @@ func (s *State) pickLatest(versions map[string]string) string {
 	if len(versions) == 0 {
 		return ""
 	}
-	
-	// 首先查找标记为 is_latest 的版本
+
+	// 收集所有标记为 is_latest 的版本
+	var latestFlagged []string
 	for v, infoPath := range versions {
-		if content, err := os.ReadFile(infoPath); err == nil {
-			var info map[string]interface{}
-			if err := json.Unmarshal(content, &info); err == nil {
-				if isLatest, ok := info["is_latest"].(bool); ok && isLatest {
-					return v
+		var info map[string]interface{}
+		var exists bool
+
+		// 优先从内存缓存获取
+		info, exists = s.infoCache[infoPath]
+		if !exists {
+			// 如果内存中没有，尝试读取磁盘（通常发生在启动初始化时）
+			if content, err := os.ReadFile(infoPath); err == nil {
+				if err := json.Unmarshal(content, &info); err == nil {
+					// 这里不更新 s.infoCache，因为 pickLatest 可能在持有锁的情况下被调用
+					// 而 s.infoCache 的更新已经在 UpdateIndex 或 InitFromDisk 中处理
 				}
 			}
 		}
-	}
-	
-	// 如果没有找到标记为 is_latest 的版本，使用版本比较作为后备方案
-	// 分离稳定版和非稳定版
-	var stableVersions []string
-	var unstableVersions []string
-	
-	for v := range versions {
-		if strings.Contains(v, "-") {
-			unstableVersions = append(unstableVersions, v)
-		} else {
-			stableVersions = append(stableVersions, v)
+
+		if info != nil {
+			if isLatest, ok := info["is_latest"].(bool); ok && isLatest {
+				latestFlagged = append(latestFlagged, v)
+			}
 		}
 	}
-	
+
+	// 如果有多个版本被标记为 latest（虽然理论上不应该），选择其中版本号最高的一个
+	if len(latestFlagged) > 0 {
+		latest := latestFlagged[0]
+		for _, v := range latestFlagged[1:] {
+			if compareVersions(v, latest) > 0 {
+				latest = v
+			}
+		}
+		return latest
+	}
+
+	// 如果没有找到标记为 is_latest 的版本，使用版本比较作为后备方案
+	var stableVersions []string
+	var unstableVersions []string
+
+	for v := range versions {
+		if isStable(v) {
+			stableVersions = append(stableVersions, v)
+		} else {
+			unstableVersions = append(unstableVersions, v)
+		}
+	}
+
 	// 优先从稳定版中选择最新的
 	if len(stableVersions) > 0 {
 		latest := stableVersions[0]
@@ -395,7 +445,7 @@ func (s *State) pickLatest(versions map[string]string) string {
 		}
 		return latest
 	}
-	
+
 	// 如果没有稳定版，从非稳定版中选择最新的
 	if len(unstableVersions) > 0 {
 		latest := unstableVersions[0]
@@ -406,12 +456,30 @@ func (s *State) pickLatest(versions map[string]string) string {
 		}
 		return latest
 	}
-	
+
 	return ""
+}
+
+// isStable 检查版本号是否为稳定版
+func isStable(v string) bool {
+	vLower := strings.ToLower(v)
+	keywords := []string{"alpha", "beta", "rc", "snapshot", "pre", "dev"}
+	for _, k := range keywords {
+		if strings.Contains(vLower, k) {
+			return false
+		}
+	}
+	// 额外检查：如果包含横杠，通常也是非稳定版（如 1.2.3-v1）
+	// 但有些启动器可能使用横杠作为正常版本号的一部分，所以以关键词优先
+	return true
 }
 
 // compareVersions 比较版本
 func compareVersions(v1, v2 string) int {
+	if v1 == v2 {
+		return 0
+	}
+
 	v1Clean := strings.TrimPrefix(v1, "v")
 	v2Clean := strings.TrimPrefix(v2, "v")
 
@@ -424,22 +492,52 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	for i := 0; i < maxLen; i++ {
-		n1 := 0
+		var p1, p2 string
 		if i < len(parts1) {
-			fmt.Sscanf(parts1[i], "%d", &n1)
+			p1 = parts1[i]
 		}
-		n2 := 0
 		if i < len(parts2) {
-			fmt.Sscanf(parts2[i], "%d", &n2)
+			p2 = parts2[i]
 		}
-		if n1 > n2 {
-			return 1
+
+		if p1 == p2 {
+			continue
 		}
-		if n1 < n2 {
-			return -1
+
+		n1, err1 := parseFirstInt(p1)
+		n2, err2 := parseFirstInt(p2)
+
+		if err1 == nil && err2 == nil {
+			if n1 > n2 {
+				return 1
+			}
+			if n1 < n2 {
+				return -1
+			}
+			// 如果数字部分相同，比较整个字符串（例如 2.0.0_beta-1 vs 2.0.0_beta-2）
+			if p1 > p2 {
+				return 1
+			}
+			if p1 < p2 {
+				return -1
+			}
+		} else {
+			// 如果不能解析为数字，按字符串比较
+			if p1 > p2 {
+				return 1
+			}
+			if p1 < p2 {
+				return -1
+			}
 		}
 	}
 	return 0
+}
+
+func parseFirstInt(s string) (int, error) {
+	var n int
+	_, err := fmt.Sscanf(s, "%d", &n)
+	return n, err
 }
 
 func (s *State) handleStatus(w http.ResponseWriter, r *http.Request) {
