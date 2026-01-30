@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDark, useToggle } from '@vueuse/core'
-import { Menu, Sun, Moon, Home, Folder, BarChart2, FileText } from 'lucide-vue-next'
+import { Menu, Sun, Moon, Home, Folder, BarChart2, FileText, Info } from 'lucide-vue-next'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import Button from '@/components/ui/Button.vue'
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet'
@@ -18,6 +18,7 @@ const links = [
   { name: '文件浏览', path: '/files', icon: Folder },
   { name: '数据统计', path: '/stats', icon: BarChart2 },
   { name: 'API 文档', path: '/api', icon: FileText },
+  { name: '关于', path: '/about', icon: Info },
 ]
 </script>
 
@@ -55,7 +56,7 @@ const links = [
             </nav>
             <div class="mt-auto">
                <div class="text-sm text-muted-foreground text-center">
-                   v3.14.7
+                   v3.14.8
                </div>
             </div>
           </SheetContent>

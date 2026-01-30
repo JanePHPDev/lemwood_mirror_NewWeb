@@ -24,7 +24,7 @@ const links = [
       </a>
       <Button variant="outline" size="icon" class="ml-auto h-8 w-8">
         <Github class="h-4 w-4" />
-        <span class="sr-only">GitHub</span>
+        <a href="https://github.com/leemwood/lemwood_mirror/" class="sr-only">GitHub</a>
       </Button>
     </div>
     <div class="flex-1">
@@ -45,7 +45,7 @@ const links = [
     </div>
     <div class="mt-auto p-4">
         <div class="text-xs text-muted-foreground text-center">
-            v3.14.7
+            v3.14.8
         </div>
     </div>
   </div>
