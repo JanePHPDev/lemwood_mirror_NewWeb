@@ -27,154 +27,121 @@
 ## 目录结构
 - `cmd/mirror`：主程序入口。
 - `internal/...`：配置、浏览器模拟、GitHub 交互、下载、存储、HTTP 服务。
-- `web/static`：前端 HTML/CSS/JS。
+- `web/`：前端 Vue 项目源码。
+- `web/dist`：构建后的前端静态资源（由后端托管）。
 - `download`：下载文件根目录（默认）。
 - `.github/workflows`：GitHub Actions 工作流，用于自动构建。
 
-## 配置
+## 部署说明
 
-通过修改 `config.json` 文件来自定义程序的行为。
+### 1. 环境准备
+- **Go**: 1.21 或更高版本（用于构建后端）。
+- **Node.js & npm**: 最新稳定版（用于构建前端）。
+- **操作系统**: Windows Server 2022 / Linux。  
+如果你在GitHub Actions中下载了构建好的二进制文件，无需安装Go和Node.js等环境，直接解压运行即可。
 
-- `github_token`: 你的 GitHub Personal Access Token，用于提高 API 请求速率限制。
-- `storage_path`: 下载文件的存储目录，默认为 `download`。
-- `server_address`: 用于生成 `index.json` 中资源下载链接的服务器地址（IP 或域名），不应包含端口号，例如 `http://127.0.0.1`。如果留空，程序将自动获取并使用服务器的公共 IP 地址。
-- `server_port`: HTTP 服务的监听端口，默认为 8080。此端口也会用于生成 `index.json` 中的下载链接。
-- `check_cron`: 自动检查更新的 cron 表达式，默认为每 10 分钟检查一次 (`*/10 * * * *`)。
-- `proxy_url`: 用于网络请求的 HTTP/HTTPS 代理地址，例如 `http://127.0.0.1:7890`。
-- `asset_proxy_url`: 用于加速 GitHub Release 资源下载的代理地址，会作为前缀拼接到下载链接前。
-- `xget_domain`: Xget 服务域名，用于加速 GitHub 仓库的访问 and 下载。
-- `xget_enabled`: 是否启用 Xget 加速，`true` 或 `false`。
-- `download_timeout_minutes`: 下载单个文件的超时时间（分钟），默认为 40。
-- `concurrent_downloads`: 并发下载数，默认为 3。
-- `launchers`: 要镜像的启动器列表。
-  - `name`: 启动器名称。
-  - `source_url`: 包含 GitHub 仓库链接的官方页面地址。
-  - `repo_selector`: 用于从页面中提取 GitHub 仓库链接的 CSS 选择器。
+### 2. 构建项目
 
-## 构建与运行
+#### 前端构建
+进入 `web` 目录进行构建：
+```bash
+cd web
+npm install
+npm run build
+```
+构建产物将存放在 `web/dist` 目录中，后端会自动托管此目录。
 
-### 手动构建
-
-确保你已安装 Go (>=1.21)。
-
+#### 后端构建
+在项目根目录执行：
 ```powershell
-# 在项目根目录执行
-go build -o .\mirror.exe .\cmd\mirror
+# Windows
+go build -o mirror.exe ./cmd/mirror
+
+# Linux
+go build -o mirror ./cmd/mirror
 ```
 
-### 自动构建
+### 3. 配置文件 (config.json)
 
-每次向 `main` 分支推送代码时，GitHub Actions 会自动构建 Windows 和 Linux 的二进制文件、配置文件和前端资源，并打包为 `mirror-windows.zip` 和 `mirror-linux.tar.gz`。你可以在仓库的 Actions 页面下载这些构建产物。
-
-### 运行
-
-```powershell
-# 可选：设置 GitHub Token
-$env:GITHUB_TOKEN = "<your token>"
-# 启动服务
-./mirror.exe
-# 访问 http://localhost:8080
-```
-
-## 使用说明
-- 前端首页显示各启动器最新版本信息、文件路径提示与下载链接。
-- 点击“手动刷新”将触发一次扫描更新。
-- 文件浏览可输入相对路径（例如 `.`、`fcl/`、`fcl/v1.2.3/`）查看结构。
-
-## 数据统计
-系统内置了基于 SQLite 的数据统计功能，自动记录用户的访问和下载行为。数据文件存储在 `storage_path` 下的 `stats.db` 中。
-- **访问统计**：记录 IP、User-Agent、Referer、地理位置（基于 IP）。
-- **下载统计**：记录具体下载的启动器、版本和文件名。
-- **可视化面板**：前端首页提供直观的统计图表和排行榜。
-
-## API 集成
-
-其他网站或服务可以通过访问以下端点来获取镜像的版本信息：
-- `GET /api/status`：返回所有版本的详细信息（不包含 `latest` 字段）。
-- `GET /api/latest`：返回每个启动器当前最新稳定版本的信息。
-- `GET /api/latest/{launcher_id}`：返回指定启动器当前最新稳定版本的信息。
-- `GET /api/stats`：返回详细的统计数据。
-
-### 请求
-
-```http
-GET /api/status
-```
-
-#### 获取特定启动器信息（返回所有版本）
-
-你也可以通过在路径中指定启动器 ID 来获取特定启动器的数据。
-
-```http
-GET /api/status/{launcher_id}
-```
-
-#### 获取全部最新稳定版本（带 `latest` 字段）
-
-```http
-GET /api/latest
-```
-
-#### 获取指定启动器最新稳定版本（带 `latest` 字段）
-
-```http
-GET /api/latest/{launcher_id}
-```
-
-#### 获取统计数据
-
-```http
-GET /api/stats
-```
-
-### 响应示例
+在运行前，请根据实际情况修改项目根目录下的 `config.json`：
 
 ```json
 {
-  "fcl": {
-    "version": "1.2.6.3",
-    "download_path": "download/fcl/1.2.6.3",
-    "latest": true,
-    "assets": [
-      {
-        "name": "FCL-release-1.2.6.3-all.apk",
-        "size": 123456,
-        "download_url": "http://your-server-address:8080/download/fcl/1.2.6.3/FCL-release-1.2.6.3-all.apk"
-      }
-    ]
-  },
-  "zl": {
-    "version": "141000",
-    "download_path": "download/zl/141000",
-    "latest": true,
-    "assets": [
-      {
-        "name": "ZalithLauncher-1.4.1.0.apk",
-        "size": 234567,
-        "download_url": "http://your-server-address:8080/download/zl/141000/ZalithLauncher-1.4.1.0.apk"
-      }
-    ]
-  }
+  "server_address": "http://your-domain.com", // 服务器访问地址，用于生成 index.json 中的链接
+  "server_port": 8080,                        // HTTP 服务监听端口
+  "download_url_base": "https://mirror.lemwood.icu", // 外部下载链接的基准地址（如 CDN 或反代地址）
+  "check_cron": "*/10 * * * *",               // 定时任务表达式，默认每 10 分钟扫描一次
+  "storage_path": "download",                 // 下载文件和数据库的存储路径
+  "github_token": "your_github_token",        // GitHub PAT 令牌，用于解除 API 请求频率限制
+  "proxy_url": "",                            // 全局 HTTP 代理地址
+  "asset_proxy_url": "",                      // GitHub Release 资产下载加速代理前缀
+  "xget_domain": "https://xget.xi-xu.me",      // Xget 加速服务域名
+  "xget_enabled": true,                       // 是否启用 Xget 加速
+  "download_timeout_minutes": 40,             // 单个文件下载超时时间（分钟）
+  "concurrent_downloads": 3,                  // 同时进行的下载任务数量
+  "launchers": [                              // 需要镜像的启动器配置列表
+    {
+      "name": "fcl",                          // 启动器唯一标识名称
+      "source_url": "https://github.com/FCL-Team/FoldCraftLauncher", // 官方页面或仓库 URL
+      "repo_selector": ""                     // CSS 选择器或正则，用于从 source_url 提取仓库地址
+    }
+  ]
+}
+```
+**关键配置项：**
+- `github_token`: 建议配置以避免 GitHub API 频率限制。
+- `download_url_base`: 外部访问的基准 URL，用于生成 `info.json` 中的下载链接。
+
+### 4. 运行服务
+
+#### 直接运行
+```powershell
+# Windows
+./mirror.exe
+
+# Linux
+chmod +x mirror
+./mirror
+```
+
+#### 使用环境变量 (可选)
+可以通过环境变量覆盖配置：
+```powershell
+$env:GITHUB_TOKEN = "your_token"
+./mirror.exe
+```
+
+### 5. 反向代理 (推荐)
+建议使用 Nginx 进行反向代理，并开启 HTTPS：
+```nginx
+server {
+    listen 443 ssl;
+    server_name mirror.lemwood.icu;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 }
 ```
 
-- **version**: 版本号。
-- **download_path**: 存储该版本文件的相对路径。
-- **latest**: 仅在 `/api/latest` 与 `/api/latest/{launcher_id}` 响应中提供，表示是否为该启动器当前最新稳定版本。
-- **assets**: 一个包含所有已下载资产文件的数组。
-  - **name**: 资产文件名。
-  - **size**: 文件大小（字节）。
-  - **download_url**: 文件的完整下载链接。
+## 使用说明
+- **前端首页**: 显示各启动器最新版本信息、下载量统计与下载链接。
+- **手动刷新**: 点击“手动刷新”或访问 `POST /api/scan` 将立即触发一次版本检查。
+- **文件浏览**: 访问 `/files` 可视化浏览存储目录结构。
 
-### 响应头
-- `X-Latest-Versions`: 仅在 `GET /api/latest` 响应中提供所有启动器的最新版本映射，例如：`fcl=v1.2.3,zl=141000`。
-- `X-Latest-Version`: 仅在 `GET /api/latest/{launcher_id}` 响应中提供该启动器的最新版本号。
+## 数据统计
+系统内置了基于 SQLite 的数据统计功能，自动记录用户的访问和下载行为。数据文件存储在 `storage_path` 下的 `stats.db` 中。
+- **访问统计**: 记录 IP、User-Agent、地理位置等信息。
+- **下载统计**: 记录具体下载的启动器、版本和文件名。
+- **可视化面板**: 前端提供直观的每日趋势、下载分布图表。
 
-## 认证与限流
-- 建议在配置或环境变量中提供 `GITHUB_TOKEN`，提升 API 配额。
-- 代码在遇到 403/配额耗尽时会按照响应的重置时间进行退避等待（有限）。
+## API 集成
+- `GET /api/status`: 获取所有版本详情。
+- `GET /api/latest`: 获取各启动器最新稳定版。
+- `GET /api/latest/{id}`: 获取指定启动器最新版本号（纯文本）。
+- `GET /api/stats`: 获取统计摘要。
 
-## 并发安全与资源清理
-- 下载采用原子写入（.partial -> rename）。
-- 使用上下文超时控制网络请求。
-- 在内存状态更新和索引维护处使用锁保证并发安全。
+---
+*Powered by Lemwood Mirror Team*
