@@ -45,7 +45,7 @@ const links = [
     </div>
     <div class="mt-auto p-4">
         <div class="text-xs text-muted-foreground text-center">
-            v3.14.6
+            v3.14.7
         </div>
     </div>
   </div>
