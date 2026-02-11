@@ -1,5 +1,19 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import { Github, Heart } from 'lucide-vue-next'
+import { getStats } from '@/services/api';
+
+const stats = ref({})
+
+onMounted(async () => {
+  try {
+    const response = await getStats()
+    stats.value = response.data
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+    stats.value = { total_days: '-' }
+  }
+})
 </script>
 
 <template>
@@ -9,18 +23,20 @@ import { Github, Heart } from 'lucide-vue-next'
         <p class="text-center text-sm leading-loose text-muted-foreground md:text-left">
           - Built with <Heart class="inline-block h-4 w-4 text-red-500 animate-pulse" /> by 
           <a href="/#/about" class="font-medium underline underline-offset-4 hover:text-foreground">
-            Lemwood & MengZe2 -
+            Lemwood & MengZe2
           </a>
-          .
+          -
+          <br />
+          已坚强运行 {{ stats.total_days || '-' }} 天,由 Vite & Go 强力驱动
         </p>
       </div>
       <div class="flex gap-4">
-          <a href="https://github.com/JanePHPDev/lemwood_mirror_NewWeb" target="_blank" class="text-muted-foreground hover:text-foreground">
-              <Github class="h-5 w-5" />
-          </a>
-          <a href="https://beian.miit.gov.cn/" target="_blank" class="text-xs text-muted-foreground hover:text-foreground flex items-center">
-              新ICP备2024015133号-5
-          </a>
+        <a href="https://github.com/JanePHPDev/lemwood_mirror_NewWeb" target="_blank" class="text-muted-foreground hover:text-foreground">
+          <Github class="h-5 w-5" />
+        </a>
+        <a href="https://beian.miit.gov.cn/" target="_blank" class="text-xs text-muted-foreground hover:text-foreground flex items-center">
+          新ICP备2024015133号-5
+        </a>
       </div>
     </div>
   </footer>

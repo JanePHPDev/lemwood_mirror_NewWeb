@@ -278,18 +278,6 @@ onMounted(async () => {
         </Card>
         <Card>
           <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle class="text-sm font-medium">运行天数</CardTitle>
-            <Activity class="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div class="text-2xl font-bold">{{ stats.total_days || '-' }}</div>
-            <p class="text-xs text-muted-foreground">
-              自系统上线以来
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle class="text-sm font-medium">覆盖地区</CardTitle>
             <Globe class="h-4 w-4 text-muted-foreground" />
           </CardHeader>

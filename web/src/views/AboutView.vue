@@ -13,6 +13,7 @@ import Button from '@/components/ui/Button.vue'
       <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">关于本项目</h1>
       <p class="text-muted-foreground text-base md:text-lg">
         探索 Lemwood Mirror 的幕后故事、技术底座与那些支持我们的朋友。
+        本站隶属于NingZeStudio，系NingZeStudio旗下旗舰级开源项目。
       </p>
     </div>
 
