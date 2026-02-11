@@ -1107,7 +1107,7 @@ func (s *State) handleLatestLauncher(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *State) handleStats(w http.ResponseWriter, r *http.Request) {
-	data, err := stats.GetStats()
+	data, err := stats.GetStats(s.BasePath)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Printf("获取统计数据失败: %v", err)

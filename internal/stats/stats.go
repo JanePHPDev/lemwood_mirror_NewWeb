@@ -157,6 +157,10 @@ func getIPInfo(ip string) *IPInfo {
 type StatsData struct {
 	TotalVisits     int64          `json:"total_visits"`
 	TotalDownloads  int64          `json:"total_downloads"`
+	TotalDays       int64          `json:"total_days"`
+	Last30Visits    int64          `json:"last_30_visits"`
+	Last30Downloads int64          `json:"last_30_downloads"`
+	Disk            *DiskInfo      `json:"disk"`
 	TopDownloads    []DownloadRank `json:"top_downloads"`
 	GeoDistribution []GeoStat      `json:"geo_distribution"`
 	DailyStats      []DailyStat    `json:"daily_stats"`
@@ -179,7 +183,7 @@ type DailyStat struct {
 	DownloadCount int64  `json:"download_count"`
 }
 
-func GetStats() (*StatsData, error) {
+func GetStats(storagePath string) (*StatsData, error) {
 	data := &StatsData{
 		TopDownloads:    []DownloadRank{},
 		GeoDistribution: []GeoStat{},
@@ -190,6 +194,15 @@ func GetStats() (*StatsData, error) {
 		return data, nil
 	}
 
+	// 获取磁盘占用
+	if storagePath != "" {
+		if diskInfo, err := GetDiskUsage(storagePath); err == nil {
+			data.Disk = diskInfo
+		} else {
+			log.Printf("Error getting disk usage for %s: %v", storagePath, err)
+		}
+	}
+
 	// 总访问量
 	if err := db.DB.QueryRow("SELECT COUNT(*) FROM visits").Scan(&data.TotalVisits); err != nil && err != sql.ErrNoRows {
 		log.Printf("Error counting visits: %v", err)
@@ -198,6 +211,26 @@ func GetStats() (*StatsData, error) {
 	// 总下载量
 	if err := db.DB.QueryRow("SELECT COUNT(*) FROM downloads").Scan(&data.TotalDownloads); err != nil && err != sql.ErrNoRows {
 		log.Printf("Error counting downloads: %v", err)
+	}
+
+	// 30天访问量
+	if err := db.DB.QueryRow("SELECT COUNT(*) FROM visits WHERE created_at > datetime('now', '-30 days')").Scan(&data.Last30Visits); err != nil && err != sql.ErrNoRows {
+		log.Printf("Error counting last 30 days visits: %v", err)
+	}
+
+	// 30天下载量
+	if err := db.DB.QueryRow("SELECT COUNT(*) FROM downloads WHERE created_at > datetime('now', '-30 days')").Scan(&data.Last30Downloads); err != nil && err != sql.ErrNoRows {
+		log.Printf("Error counting last 30 days downloads: %v", err)
+	}
+
+	// 总运行天数
+	var startTimeStr string
+	if err := db.DB.QueryRow("SELECT value FROM system_info WHERE key = 'start_time'").Scan(&startTimeStr); err == nil {
+		startTime, err := time.Parse("2006-01-02 15:04:05", startTimeStr)
+		if err == nil {
+			days := int64(time.Since(startTime).Hours()/24) + 1
+			data.TotalDays = days
+		}
 	}
 
 	// 下载排行 (Top 10)

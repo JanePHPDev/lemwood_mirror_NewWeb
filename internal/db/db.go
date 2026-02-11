@@ -77,6 +77,11 @@ func createTables() error {
             reason TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
+		`CREATE TABLE IF NOT EXISTS system_info (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 		`CREATE INDEX IF NOT EXISTS idx_visits_created_at ON visits(created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_downloads_file_name ON downloads(file_name)`,
@@ -87,6 +92,12 @@ func createTables() error {
 			return fmt.Errorf("创建表失败: %w, query: %s", err, query)
 		}
 	}
+
+	// 记录系统首次启动时间
+	if _, err := DB.Exec("INSERT OR IGNORE INTO system_info (key, value) VALUES (?, datetime('now'))", "start_time"); err != nil {
+		return fmt.Errorf("记录系统启动时间失败: %w", err)
+	}
+
 	return nil
 }
 

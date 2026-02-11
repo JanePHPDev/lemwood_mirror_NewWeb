@@ -40,6 +40,19 @@ const loading = ref(true);
 const mapLoaded = ref(false);
 const isDark = useDark();
 
+const formatBytes = (bytes) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const diskPercentage = computed(() => {
+    if (!stats.value.disk || !stats.value.disk.total) return 0;
+    return Math.round((stats.value.disk.used / stats.value.disk.total) * 100);
+});
+
 const mapCountryName = (name) => {
     if (!name) return '';
     const nameMap = {
@@ -194,8 +207,8 @@ onMounted(async () => {
     </div>
 
     <div v-if="loading" class="space-y-6">
-       <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card v-for="i in 4" :key="i">
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card v-for="i in 5" :key="i">
             <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
               <Skeleton class="h-4 w-24" />
               <Skeleton class="h-4 w-4 rounded-full" />
@@ -219,7 +232,7 @@ onMounted(async () => {
     </div>
 
     <div v-else class="space-y-6">
-      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle class="text-sm font-medium">总访问量</CardTitle>
@@ -228,7 +241,7 @@ onMounted(async () => {
           <CardContent>
             <div class="text-2xl font-bold">{{ stats.total_visits?.toLocaleString() || '-' }}</div>
             <p class="text-xs text-muted-foreground">
-              实时累计访问人次
+              最近30天: {{ stats.last_30_visits?.toLocaleString() || '0' }}
             </p>
           </CardContent>
         </Card>
@@ -240,8 +253,27 @@ onMounted(async () => {
           <CardContent>
             <div class="text-2xl font-bold">{{ stats.total_downloads?.toLocaleString() || '-' }}</div>
             <p class="text-xs text-muted-foreground">
-              所有版本累计下载
+              最近30天: {{ stats.last_30_downloads?.toLocaleString() || '0' }}
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle class="text-sm font-medium">磁盘占用</CardTitle>
+            <Server class="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div class="flex items-end gap-2">
+              <div class="text-2xl font-bold">{{ diskPercentage }}%</div>
+              <div class="text-xs text-muted-foreground pb-1">已用 {{ formatBytes(stats.disk?.used) }}</div>
+            </div>
+            <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-secondary">
+              <div 
+                class="h-full bg-primary transition-all duration-500" 
+                :style="{ width: `${diskPercentage}%` }"
+                :class="{ 'bg-destructive': diskPercentage > 90, 'bg-warning': diskPercentage > 75 }"
+              ></div>
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -250,7 +282,7 @@ onMounted(async () => {
             <Activity class="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold">{{ Object.keys(stats.daily_stats || {}).length || '-' }}</div>
+            <div class="text-2xl font-bold">{{ stats.total_days || '-' }}</div>
             <p class="text-xs text-muted-foreground">
               自系统上线以来
             </p>
